@@ -77,17 +77,19 @@ void generate_nonce(UINT nonce[3]) {
     }
 }
 
-// 키 확장 함수 (32글자가 안 되면 랜덤으로 채우기)
 void expand_key(char *input_key, UINT key[8]) {
     int len = strlen(input_key);
 
+    // 32글자가 안 되면 부족한 부분을 숫자로 채움
     if (len < 32) {
+        // 부족한 길이만큼 숫자로 채우기 (예: 0x01, 0x02, ... )
         for (int i = len; i < 32; i++) {
-            input_key[i] = 'A' + (rand() % 26); // 랜덤한 알파벳으로 채우기
+            input_key[i] = (i - len + 1); // 숫자로 채움
         }
         input_key[32] = '\0'; // 널 문자 추가
     }
 
+    // 4바이트씩 끊어서 key 배열에 넣기
     for (int i = 0; i < 8; i++) {
         key[i] = ((uint32_t)input_key[i * 4] << 24) |
                  ((uint32_t)input_key[i * 4 + 1] << 16) |
@@ -95,7 +97,6 @@ void expand_key(char *input_key, UINT key[8]) {
                  ((uint32_t)input_key[i * 4 + 3]);
     }
 }
-
 // Poly1305 MAC 생성 함수 (ChaCha20-Poly1305 조합, 클램핑 없이)
 void poly1305_mac(const BYTE *msg, size_t msg_len, const BYTE key[32], BYTE mac[16]) {
     UINT r[4], s[4], acc[4] = {0};  
@@ -131,129 +132,4 @@ void poly1305_mac(const BYTE *msg, size_t msg_len, const BYTE key[32], BYTE mac[
 
     // 128비트로 제한하여 mac에 저장
     memcpy(mac, acc, 16);
-}
-
-// 메인 함수
-int main() {
-    BYTE *plaintext;
-    BYTE *ciphertext;
-    BYTE *decrypted;
-    BYTE mac[16];
-    UINT key[8];
-    UINT nonce[3];
-    char input_key[33];
-    int i, repeat_count;
-    size_t text_len = 0;
-
-    srand(time(NULL));
-
-    // 1. 평문 입력 방식을 선택
-    int input_mode;
-    printf("* 1. 문자열 입력\n* 2. 파일로부터 입력\n* 입력 방식 선택 (1 또는 2): ");
-    scanf("%d", &input_mode);
-    getchar(); // Enter 키 제거
-
-    if (input_mode == 1) {
-        // 문자열로 평문 입력 받기
-        size_t buffer_size = 1024;
-        plaintext = malloc(buffer_size);
-        ciphertext = malloc(buffer_size);
-        decrypted = malloc(buffer_size);
-
-        printf("* 평문 입력: ");
-        fgets((char *)plaintext, buffer_size, stdin);
-        plaintext[strcspn((char *)plaintext, "\n")] = '\0'; // 개행 제거
-        text_len = strlen((char *)plaintext);
-    } else if (input_mode == 2) {
-        // 파일로부터 평문 읽기
-        FILE *file = fopen("plainExample.txt", "rb");
-        if (file == NULL) {
-            perror("파일 열기 실패");
-            return 1;
-        }
-        
-        // 파일 크기 계산
-        fseek(file, 0, SEEK_END);
-        text_len = ftell(file);
-        fseek(file, 0, SEEK_SET);
-
-        // 파일 크기에 맞게 메모리 할당
-        plaintext = malloc(text_len);
-        ciphertext = malloc(text_len);
-        decrypted = malloc(text_len);
-
-        if (plaintext == NULL || ciphertext == NULL || decrypted == NULL) {
-            perror("메모리 할당 실패");
-            fclose(file);
-            return 1;
-        }
-
-        // 파일 내용 읽기
-        fread(plaintext, 1, text_len, file);
-        fclose(file);
-        printf("* 파일로부터 %zu 바이트의 평문을 읽었습니다.\n", text_len);
-    } else {
-        printf("잘못된 입력입니다.\n");
-        return 1;
-    }
-
-    // 2. 비밀 키 입력
-    printf("* 비밀 키 입력 (최대 32자리): ");
-    fgets(input_key, sizeof(input_key), stdin);
-    input_key[strcspn(input_key, "\n")] = '\0'; // 개행 제거
-
-    // 키 확장 및 nonce 생성
-    expand_key(input_key, key);
-    generate_nonce(nonce);
-    printf("* 생성된 Nonce 값: %08x %08x %08x\n", nonce[0], nonce[1], nonce[2]);
-
-    // 3. 반복 횟수 입력
-    printf("암호화 및 복호화 반복 횟수를 입력하세요: ");
-    scanf("%d", &repeat_count);
-
-    // 암호화 및 MAC 생성 테스트
-    clock_t start = clock();
-    for (int j = 0; j < repeat_count; j++) {
-        chacha20_encrypt(plaintext, ciphertext, text_len, key, 1, nonce);
-        poly1305_mac(ciphertext, text_len, (BYTE *)key, mac);
-    }
-    clock_t end = clock();
-    printf("\n* 암호화 및 MAC 생성 %d번 수행 시간: %f초\n", repeat_count, (double)(end - start) / CLOCKS_PER_SEC);
-
-    // 암호문 파일에 저장
-    FILE *crypted_file = fopen("cryptedExample.txt", "wb");
-    if (crypted_file != NULL) {
-        fwrite(ciphertext, 1, text_len, crypted_file);
-        fclose(crypted_file);
-        printf("* 암호화된 파일 cryptedExample.txt에 저장됨\n");
-    } else {
-        perror("cryptedExample.txt 파일 열기 실패");
-    }
-
-    // 복호화 테스트
-    start = clock();
-    for (int j = 0; j < repeat_count; j++) {
-        chacha20_encrypt(ciphertext, decrypted, text_len, key, 1, nonce);
-    }
-    end = clock();
-    printf("\n* 복호화 %d번 수행 시간: %f초\n", repeat_count, (double)(end - start) / CLOCKS_PER_SEC);
-
-    // 복호문 파일에 저장
-    FILE *decrypted_file = fopen("decryptedExample.txt", "wb");
-    if (decrypted_file != NULL) {
-        fwrite(decrypted, 1, text_len, decrypted_file);
-        fclose(decrypted_file);
-        printf("* 복호화된 파일 decryptedExample.txt에 저장됨\n");
-    } else {
-        perror("decryptedExample.txt 파일 열기 실패");
-    }
-
-    // 메모리 해제
-    free(plaintext);
-    free(ciphertext);
-    free(decrypted);
-
-    printf("\n* 프로그램을 종료하려면 엔터 키를 누르세요.");
-
-    return 0;
 }
