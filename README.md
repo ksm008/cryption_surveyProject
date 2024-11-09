@@ -1,6 +1,6 @@
 # cryption_surveyProject
 
-VSCode로 작업했습니다. 
+VSCode로 작업했습니다. tasks.json 파일은 받아서 쓰시거나 직접 고치셔도 됩니다.
 
 ## tasks.json
 ```
