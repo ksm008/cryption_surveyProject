@@ -4,7 +4,7 @@
 #include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
 
 #pragma comment(lib, "ws2_32.lib")
-#define PORT 8080
+#define PORT 8084
 #define BUFFER_SIZE 1024
 
 UINT key[8];
@@ -62,6 +62,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         int plainTextLen;
         BYTE ciphertext[BUFFER_SIZE];
         BYTE mac[16];
+        BYTE mac_2[16];
         UINT nonce[3];
         BYTE poly1305_key[32];
         UINT counter = 1;
@@ -70,7 +71,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
 
          // 확장된 키 출력
     
-        wcscpy(displayMessage, L"Expanded Key:\r\n");
+        wcscpy(displayMessage, L"확장된 키:\r\n");
         for (int i = 0; i < 8; i++) {
             wchar_t temp[16];
             wsprintf(temp, L"%08X ", key[i]);
@@ -78,13 +79,13 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
             if ((i + 1) % 4 == 0) wcscat(displayMessage, L"\r\n");
         }
 
-        // 1. 데이터 길이 수신 (plainTextLen)
+        // 데이터 길이 수신 (plainTextLen)
         int len = recv(client_socket, (char*)&plainTextLen, sizeof(plainTextLen), 0);
         if (len <= 0) break;
 
-        // 2. 암호문 (ciphertext) 수신
+        // 암호문 (ciphertext) 수신
         recv(client_socket, (char*)ciphertext, plainTextLen, 0);
-        wcscat(displayMessage, L"Ciphertext:\r\n");
+        wcscat(displayMessage, L"암호문:\r\n");
         for (int i = 0; i < plainTextLen; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", ciphertext[i]);
@@ -93,17 +94,10 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         }
         wcscat(displayMessage, L"\r\n");
 
-        // 3. MAC 수신
+        // MAC 수신
         recv(client_socket, (char*)mac, sizeof(mac), 0);
-        wcscat(displayMessage, L"MAC:\r\n");
-        for (int i = 0; i < 16; i++) {
-            wchar_t temp[4];
-            wsprintf(temp, L"%02X ", mac[i]);
-            wcscat(displayMessage, temp);
-        }
-        wcscat(displayMessage, L"\r\n");
-
-        // 4. Nonce 수신
+        
+        // Nonce 수신
         recv(client_socket, (char*)nonce, sizeof(nonce), 0);
         wcscat(displayMessage, L"Nonce:\r\n");
         for (int i = 0; i < 3; i++) {
@@ -113,44 +107,68 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         }
         wcscat(displayMessage, L"\r\n");
 
-        // 5. Poly1305 Key 수신
+        // Poly1305 Key 수신
         recv(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
-        wcscat(displayMessage, L"Poly1305 Key:\r\n");
+        wcscat(displayMessage, L"Poly1305 키:\r\n");
         for (int i = 0; i < 32; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", poly1305_key[i]);
             wcscat(displayMessage, temp);
             if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
         }
+
+        wcscat(displayMessage, L"MAC:\r\n");
+        for (int i = 0; i < 16; i++) {
+            wchar_t temp[4];
+            wsprintf(temp, L"%02X ", mac[i]);
+            wcscat(displayMessage, temp);
+        }
         wcscat(displayMessage, L"\r\n");
 
         BYTE decrypted[BUFFER_SIZE] = {0};
         expand_key((char*)key_bytes, key); // 키 확장
         chacha20_encrypt(ciphertext, decrypted, plainTextLen, key, counter, nonce);
+        poly1305_mac(ciphertext, plainTextLen, poly1305_key, mac_2);
 
-        // Decrypted data 출력
-        wcscat(displayMessage, L"Decrypted Data (Hex):\r\n");
-        for (int i = 0; i < plainTextLen; i++) {
+        wcscat(displayMessage, L"재생성된 Poly1305 MAC:\r\n");
+        for (int i = 0; i < 16; i++) {
             wchar_t temp[4];
-            wsprintf(temp, L"%02X ", decrypted[i]);
+            wsprintf(temp, L"%02X ", mac_2[i]);
             wcscat(displayMessage, temp);
-            if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
         }
         wcscat(displayMessage, L"\r\n");
 
-        // 16진수 데이터의 텍스트로 변환해서 출력
-        wcscat(displayMessage, L"Decrypted Data (Text):\r\n");
+        if (memcmp(mac, mac_2, sizeof(mac)) == 0) {
+            wcscat(displayMessage, L"무결성 인증에 성공하였습니다.\r\n");
+            // Decrypted data 출력
+            wcscat(displayMessage, L"복호문 (16진수):\r\n");
+            for (int i = 0; i < plainTextLen; i++) {
+                wchar_t temp[4];
+                wsprintf(temp, L"%02X ", decrypted[i]);
+                wcscat(displayMessage, temp);
+                if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
+            }
+            wcscat(displayMessage, L"\r\n");
 
-        // 텍스트로 변환
-        char decrypted_text[BUFFER_SIZE] = {0};
-        for (int i = 0; i < plainTextLen; i++) {
-            decrypted_text[i] = decrypted[i];  // 바이트 배열을 텍스트 배열로 변환
+            // 16진수 데이터의 텍스트로 변환해서 출력
+            wcscat(displayMessage, L"복호문 (텍스트):\r\n");
+
+            // 텍스트로 변환
+            char decrypted_text[BUFFER_SIZE] = {0};
+            for (int i = 0; i < plainTextLen; i++) {
+                decrypted_text[i] = decrypted[i];  // 바이트 배열을 텍스트 배열로 변환
+            }
+
+            // UTF-8로 변환된 텍스트를 출력
+            wchar_t utf16Buffer[BUFFER_SIZE] = {0};
+            MultiByteToWideChar(CP_UTF8, 0, decrypted_text, -1, utf16Buffer, BUFFER_SIZE);
+            wcscat(displayMessage, utf16Buffer);
+
+        } else {
+            wcscat(displayMessage,L"MAC 인증에 실패하였습니다.\r\n");
         }
 
-        // UTF-8로 변환된 텍스트를 출력
-        wchar_t utf16Buffer[BUFFER_SIZE] = {0};
-        MultiByteToWideChar(CP_UTF8, 0, decrypted_text, -1, utf16Buffer, BUFFER_SIZE);
-        wcscat(displayMessage, utf16Buffer);
+
 
         
         SetWindowText(hEditOutput, displayMessage);
@@ -161,8 +179,6 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
     WSACleanup();
     return 0;
 }
-
-
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPWSTR args, int ncmdshow) {
     WNDCLASS wc = {0};

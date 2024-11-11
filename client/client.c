@@ -4,7 +4,7 @@
 #include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
 
 #pragma comment(lib, "ws2_32.lib")
-#define PORT 8080
+#define PORT 8084
 #define SERVER_IP "127.0.0.1"
 #define BUFFER_SIZE 1024
 
@@ -53,7 +53,7 @@ void OnSendData(HWND hwnd) {
 
     // 확장된 키 출력
     wchar_t displayMessage[BUFFER_SIZE * 4];
-    wcscpy(displayMessage, L"Expanded Key:\r\n");
+    wcscpy(displayMessage, L"확장된 키:\r\n");
     for (int i = 0; i < 8; i++) {
         wchar_t temp[16];
         wsprintf(temp, L"%08X ", key[i]);
@@ -74,16 +74,17 @@ void OnSendData(HWND hwnd) {
     poly1305_mac(ciphertext, plainTextLen, poly1305_key, mac);
 
     // Plaintext (UTF-8) 출력
-    wcscat(displayMessage, L"Plaintext (UTF-8 Hex):\r\n");
+    wcscat(displayMessage, L"평문 (16진수):\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", utf8Plaintext[i]);
         wcscat(displayMessage, temp);
         if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
     }
+    
 
     // Ciphertext 출력
-    wcscat(displayMessage, L"Ciphertext:\r\n");
+    wcscat(displayMessage, L"\r\n암호문 (16진수)\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", ((BYTE*)ciphertext)[i]);
@@ -102,7 +103,7 @@ void OnSendData(HWND hwnd) {
     wcscat(displayMessage, L"\r\n");
 
     // Poly1305 Key 출력
-    wcscat(displayMessage, L"Poly1305 Key:\r\n");
+    wcscat(displayMessage, L"Poly1305 키:\r\n");
     for (int i = 0; i < 32; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", poly1305_key[i]);
