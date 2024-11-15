@@ -8,7 +8,7 @@
 #pragma comment(lib, "ws2_32.lib")
 #define PORT 8084
 #define SERVER_IP "127.0.0.1"
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 8192
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
@@ -21,11 +21,9 @@ HWND hCheckQ2_1, hCheckQ2_2, hCheckQ2_3, hCheckQ2_4, hCheckQ2_5;
 HFONT hFont;
 SOCKET client_socket;  
 UINT key[8];
-// BYTE key_bytes[32] = "security12345678";  // 비밀 키, 더 이상 안씀
 
 const wchar_t* fontName = L"-윤고딕320";  
 int fontSize = 16;   
-
 
 void InitializeSocketAndConnect() {
     WSADATA wsa;
@@ -78,9 +76,9 @@ void GenerateBlake3Key(const char* input, size_t inputLength, UINT key[8]) {
 }
 
 void OnSendData(HWND hwnd) {
-    wchar_t name[50], q1[100], q3[100], q4[100], q5[100], q6[100];
+    wchar_t name[50], q1[100], q3[100], q4[100], q5[100], q6[7000];
     wchar_t q2[100], timestamp[50];
-    char resultUtf8[500];
+    char resultUtf8[BUFFER_SIZE];
 
     // 사용자 입력 값 가져오기
     GetWindowText(hEditName, name, 50);
@@ -88,7 +86,7 @@ void OnSendData(HWND hwnd) {
     GetWindowText(hEditQ3, q3, 100);
     GetWindowText(hEditQ4, q4, 100);
     GetWindowText(hEditQ5, q5, 100);
-    GetWindowText(hEditQ6, q6, 100);
+    GetWindowText(hEditQ6, q6, 7000);
     GetCurrentTimeFormatted(timestamp, 50);
 
     // 모든 필드가 비어있지 않은지 확인
@@ -133,8 +131,8 @@ void OnSendData(HWND hwnd) {
     else if (SendMessage(hCheckQ2_3, BM_GETCHECK, 0, 0) == BST_CHECKED) wcscpy(q2, L"보통");
     else if (SendMessage(hCheckQ2_4, BM_GETCHECK, 0, 0) == BST_CHECKED) wcscpy(q2, L"어려움");
     else if (SendMessage(hCheckQ2_5, BM_GETCHECK, 0, 0) == BST_CHECKED) wcscpy(q2, L"매우 어려움");
-    wchar_t result[500];
-    swprintf(result, 500, L"%s|%s|%s|%s|%s|%s|%s|%s", name, timestamp, q1, q2, q3, q4, q5, q6);
+    wchar_t result[BUFFER_SIZE];
+    swprintf(result, BUFFER_SIZE, L"%s|%s|%s|%s|%s|%s|%s|%s", name, timestamp, q1, q2, q3, q4, q5, q6);
 
     // UTF-16 데이터를 UTF-8로 변환
     int utf8PlainTextLen = WideCharToMultiByte(CP_UTF8, 0, result, -1, NULL, 0, NULL, NULL);
@@ -154,12 +152,11 @@ void OnSendData(HWND hwnd) {
     // BLAKE3로 32바이트 키 생성
     GenerateBlake3Key(utf8Plaintext, plainTextLen, key);
 
-    wcscpy(displayMessage, L"BLAKE3로 생성된 키:\r\n");
+    wcscpy(displayMessage, L"::생성된 데이터::\r\n- 1. BLAKE3로 생성된 키\r\n");
     for (int i = 0; i < 8; i++) {
         wchar_t temp[16];
         wsprintf(temp, L"%08X ", key[i]);
         wcscat(displayMessage, temp);
-        if ((i + 1) % 4 == 0) wcscat(displayMessage, L"\r\n");
     }
     // Nonce 생성
     generate_nonce(nonce);
@@ -174,27 +171,27 @@ void OnSendData(HWND hwnd) {
     poly1305_mac(ciphertext, plainTextLen, poly1305_key, mac);
 
     // Plaintext (UTF-8) 출력
-    wcscat(displayMessage, L"평문 (16진수):\r\n");
+    wcscat(displayMessage, L"- 2. 평문 (16진수)\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", utf8Plaintext[i]);
         wcscat(displayMessage, temp);
-        if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
+
     }
     
 
     // Ciphertext 출력
-    wcscat(displayMessage, L"\r\n암호문 (16진수)\r\n");
+    wcscat(displayMessage, L"\r\n- 3. 암호문 (16진수)\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", ((BYTE*)ciphertext)[i]);
         wcscat(displayMessage, temp);
-        if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
+
     }
     wcscat(displayMessage, L"\r\n");
 
     // Nonce 출력
-    wcscat(displayMessage, L"Nonce:\r\n");
+    wcscat(displayMessage, L"- 4. Nonce:\r\n");
     for (int i = 0; i < 3; i++) {
         wchar_t temp[16];
         wsprintf(temp, L"%08X ", nonce[i]);
@@ -203,16 +200,15 @@ void OnSendData(HWND hwnd) {
     wcscat(displayMessage, L"\r\n");
 
     // Poly1305 Key 출력
-    wcscat(displayMessage, L"Poly1305 키:\r\n");
+    wcscat(displayMessage, L"- 5. Poly1305 키:\r\n");
     for (int i = 0; i < 32; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", poly1305_key[i]);
         wcscat(displayMessage, temp);
-        if ((i + 1) % 16 == 0) wcscat(displayMessage, L"\r\n");
     }
-
+    wcscat(displayMessage, L"\r\n");
     // MAC 출력
-    wcscat(displayMessage, L"MAC:\r\n");
+    wcscat(displayMessage, L"- 6. MAC:\r\n");
     for (int i = 0; i < 16; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", mac[i]);
