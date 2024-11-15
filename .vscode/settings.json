@@ -1,12 +1,16 @@
 {
-    "files.associations": {
-        "string.h": "c",
-        "stdio.h": "c",
-        "winsock2.h": "c",
-        "windows.h": "c",
-        "*.rh": "c",
-        "chacha20.h": "c",
-        "wchar.h": "c"
-    },
     "C_Cpp.errorSquiggles": "disabled"
-}
+} // {
+//     "files.associations": {
+//         "string.h": "c",
+//         "stdio.h": "c",
+//         "winsock2.h": "c",
+//         "windows.h": "c",
+//         "*.rh": "c",
+//         "chacha20.h": "c",
+//         "wchar.h": "c",
+//         "commctrl.h": "c",
+//         "blake3.h": "c"
+//     },
+//     "C_Cpp.errorSquiggles": "disabled"
+// }
