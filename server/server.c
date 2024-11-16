@@ -170,22 +170,22 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
                         wcscat(displayResult, L"\r\n제출일자: ");
                         break;
                     case 2:
-                        wcscat(displayResult, L"\r\n1. 현대암호학은 어떤 과목이라고 생각합니까?\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n1. 현대암호학은 어떤 과목이라고 생각합니까?\r\n- ");
                         break;
                     case 3:
-                        wcscat(displayResult, L"\r\n2. 현대암호학의 강의 난이도는 어떻습니까?\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n2. 현대암호학의 강의 난이도는 어떻습니까?\r\n- ");
                         break;
                     case 4:
-                        wcscat(displayResult, L"\r\n3. 난이도에 대한 이유는 무엇입니까?\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n3. 난이도에 대한 이유는 무엇입니까?\r\n- ");
                         break;
                     case 5:
-                        wcscat(displayResult, L"\r\n4. 현재 알고 있는 암호화 방식을 알려주세요.\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n4. 현재 알고 있는 암호화 방식을 알려주세요.\r\n- ");
                         break;
                     case 6:
-                        wcscat(displayResult, L"\r\n5. 암호학에 관하여 더 알고 싶은 것들이 있습니까?\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n5. 암호학에 관하여 더 알고 싶은 것들이 있습니까?\r\n- ");
                         break;
                     case 7:
-                        wcscat(displayResult, L"\r\n6. 본 강의를 들으면서 바라는 점이 있다면 적어주세요.\r\n- ");
+                        wcscat(displayResult, L"\r\n\r\n6. 본 강의를 들으면서 바라는 점이 있다면 적어주세요.\r\n- ");
                         break;
                     default:
                         break;
