@@ -158,6 +158,7 @@ void OnSendData(HWND hwnd) {
         wsprintf(temp, L"%08X ", key[i]);
         wcscat(displayMessage, temp);
     }
+    wcscat(displayMessage, L"\r\n");
     // Nonce 생성
     generate_nonce(nonce);
 
