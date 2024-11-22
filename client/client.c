@@ -315,8 +315,6 @@ void OnSendData(HWND hwnd) {
         wcscat(displayMessage, temp);
     }
     wcscat(displayMessage, L"\r\n");
-
-    wcscat(displayMessage, L"\r\n");
     // MAC 출력
     wcscat(displayMessage, L"- 6. MAC:\r\n");
     for (int i = 0; i < 16; i++) {
