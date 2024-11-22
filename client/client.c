@@ -327,34 +327,10 @@ void OnSendData(HWND hwnd) {
     // 전송된 데이터를 표시할 창에 결과 출력
     SetWindowText(hEditDisplay, displayMessage);
 
-    // 서버로 데이터 전송 (실제 암호문 길이를 사용하여 바이너리로 전송)
-    // send(client_socket, (char*)key, sizeof(key), 0);
-    // send(client_socket, (char*)&enc_len, sizeof(enc_len), 0);
-    // send(client_socket, (char*)enc_key, enc_leng, 0);
-
-
-    // // 16진수로 데이터를 메시지 박스로 띄우기
-    // wchar_t temp[8];  // 각 데이터는 두 자리가 필요하므로 여유 공간을 두고 문자열에 추가
-    // wchar_t encKeyMessage[BUFFER_SIZE * 2];  // 데이터를 출력할 메시지 버퍼
-
-    // // 초기화
-    // wcscpy(encKeyMessage, L"Encrypted data:\r\n");
-
-    // // 데이터 길이만큼 16진수로 출력
-    // for (size_t i = 0; i < enc_length; i++) {
-    //     wchar_t temp[4];
-    //     wsprintf(temp, L"%02X ", enc_key_backup[i]);
-    //     wcscat(encKeyMessage, temp);
-    // }
-   
-    // // 메시지 박스에 직접 출력
-    // MessageBox(NULL, encKeyMessage, L"Sent Encrypted Data", MB_OK);
-
     send(client_socket, (char*)&plainTextLen, sizeof(plainTextLen), 0);
     send(client_socket, (char*)ciphertext, plainTextLen, 0);
     send(client_socket, (char*)mac, sizeof(mac), 0);
     send(client_socket, (char*)nonce, sizeof(nonce), 0);
-    // send(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
 
     // GUI에 전송 상태 표시
     SetWindowText(hEditSend, L"메시지 전송 완료");

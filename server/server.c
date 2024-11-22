@@ -185,7 +185,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
                 ExitProcess(0);         
             break;
         } 
-        
+
         recv(client_socket, (char*)enc_key, enc_length, 0);
 
         ECC_Dec(enc_key, enc_length, key, 8);
@@ -208,8 +208,6 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         recv(client_socket, (char*)ciphertext, plainTextLen, 0);
         recv(client_socket, (char*)mac, sizeof(mac), 0);
         recv(client_socket, (char*)nonce, sizeof(nonce), 0);
-        // recv(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
-
                
         wcscat(displayMessage, L"암호문:\r\n");
         for (int i = 0; i < plainTextLen; i++) {
