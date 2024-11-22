@@ -171,8 +171,21 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         UINT nonce[3];
         UINT counter = 1;
         int plainTextLen;
+        int isConn;
 
-        recv(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+        isConn = recv(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+
+        if (isConn == 0) {
+        // 클라이언트가 연결 종료
+            MessageBox(NULL, L"클라이언트가 연결을 종료했습니다. 서버를 종료합니다.", L"알림", MB_OK);
+                closesocket(client_socket);  
+                closesocket(server_socket);  
+                WSACleanup();             
+                PostQuitMessage(0);
+                ExitProcess(0);         
+            break;
+        } 
+        
         recv(client_socket, (char*)enc_key, enc_length, 0);
 
         ECC_Dec(enc_key, enc_length, key, 8);
@@ -303,14 +316,14 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
                 wcscat(displayResult, token);
                 fieldIndex++;
                 token = wcstok(NULL, L"|", &context);
-            }
-            
+            }            
 
         } else {
             wcscat(displayMessage,L"MAC 인증에 실패하였습니다.\r\n");
         }
         SetWindowText(hEditOutput, displayMessage);
         SetWindowText(hEditDisplay, displayResult);
+        
     }
 
     closesocket(client_socket);
