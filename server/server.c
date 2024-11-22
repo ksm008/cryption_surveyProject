@@ -1,24 +1,67 @@
 #include <winsock2.h>
 #include <windows.h>
+#include <openssl/ec.h>
+#include <openssl/ecdh.h>
+#include <openssl/obj_mac.h>
+#include <openssl/err.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
+#include "../encryption/ECC.h" 
 
 #pragma comment(lib, "ws2_32.lib")
 #define PORT 8084
 #define BUFFER_SIZE 8192
 
 #define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 1000
+#define WINDOW_HEIGHT 800
 
 HWND hEditOutput, hEditDisplay;
 HFONT hFont; 
 SOCKET server_socket, client_socket;
 UINT key[8];
+EC_KEY *key_pair = NULL;
 
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 const wchar_t* fontName = L"-윤고딕320";  
 int fontSize = 16;  
+
+void initialize_openssl() {
+    if (OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL) == 0) {
+        fprintf(stderr, "OpenSSL 초기화 실패\n");
+        abort();
+    }
+}
+
+
+void ECC_Dec(BYTE *input, size_t input_len, UINT *output, size_t output_len) {
+    // ECC 그룹 생성 (개인 키와 같은 곡선 사용)
+    const EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_secp256k1);
+    if (!group) {
+        MessageBox(NULL, L"ECC 그룹 생성 실패", L"오류", MB_OK);
+        return;
+    }
+
+    // 개인 키를 이용하여 복호화 수행
+    if (!key_pair) {
+        MessageBox(NULL, L"ECC 개인 키가 초기화되지 않았습니다.", L"오류", MB_OK);
+        EC_GROUP_free((EC_GROUP *)group);
+        return;
+    }
+
+    // 복호화 수행
+    size_t decrypted_len = ecc_decrypt(key_pair, input, input_len, output, output_len);
+    if (decrypted_len != output_len * sizeof(UINT)) {
+        // MessageBox(NULL, L"ECC 복호화 실패", L"오류", MB_OK);
+        EC_GROUP_free((EC_GROUP *)group);
+        return;
+    }
+
+    // 메모리 해제
+    EC_GROUP_free((EC_GROUP *)group);
+}
 
 DWORD WINAPI ServerThread(LPVOID lpParam) {
     WSADATA wsa;
@@ -58,38 +101,103 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         WSACleanup();
         return 1;
     }
-    SetWindowText(hEditOutput, L"클라이언트와 연결되었습니다!");
+
+    int nid = NID_secp256k1;
+    key_pair = EC_KEY_new_by_curve_name(NID_secp256k1);
+    if (!key_pair || !EC_KEY_generate_key(key_pair)) {
+        handle_errors();
+    }
+
+    // 공개 키 직렬화
+    const EC_GROUP *group = EC_KEY_get0_group(key_pair);
+    const EC_POINT *pub_key = EC_KEY_get0_public_key(key_pair);
+    unsigned char pub_key_buf[256];
+    size_t pub_key_len = EC_POINT_point2oct(group, pub_key, POINT_CONVERSION_UNCOMPRESSED, pub_key_buf, sizeof(pub_key_buf), NULL);
+    if (pub_key_len == 0) {
+        handle_errors();
+    }
+
+    // 개인 키 가져오기
+    const BIGNUM *priv_key = EC_KEY_get0_private_key(key_pair);
+    if (!priv_key) {
+        handle_errors();
+    }
+
+    // 개인 키를 16진수 문자열로 변환
+    char *priv_key_hex = BN_bn2hex(priv_key);
+    if (!priv_key_hex) {
+        handle_errors();
+    }
+
+    send(client_socket, (char*)pub_key_buf, pub_key_len, 0);
+
+    // 서버 로그에 공개 키와 개인 키 출력
+    wchar_t displayMessage[BUFFER_SIZE * 8] = L"클라이언트와 연결되었습니다!\r\n공개 키 전송 완료:\r\n";
+    for (size_t i = 0; i < pub_key_len; i++) {
+        wchar_t temp[4];
+        wsprintf(temp, L"%02X", pub_key_buf[i]);
+        wcscat(displayMessage, temp);
+    }
+    wcscat(displayMessage, L"\r\n");
+
+    wcscat(displayMessage, L"개인 키:\r\n");
+    size_t priv_key_len = strlen(priv_key_hex);
+    for (size_t i = 0; i < priv_key_len; i++) {
+        wchar_t temp[2];
+        wsprintf(temp, L"%c", priv_key_hex[i]);
+        wcscat(displayMessage, temp);
+    }
+    wcscat(displayMessage, L"\r\n");
+
+    SetWindowText(hEditOutput, displayMessage);
+
+    // 개인 키 문자열 메모리 해제
+    OPENSSL_free(priv_key_hex);
 
     while (1) {
-        wchar_t displayMessage[BUFFER_SIZE * 6] = L"";
+        wchar_t displayMessage[BUFFER_SIZE * 12] = L"";
         wchar_t displayResult[BUFFER_SIZE * 6] = L"";      
 
+        int enc_length = 0;
+        BYTE enc_key[512] = {0};
         BYTE ciphertext[BUFFER_SIZE];
         BYTE mac[16];
         BYTE mac_2[16];
-        BYTE poly1305_key[32];    
+        BYTE poly1305_key[32];   
+        BYTE enc_poly1305_key[512] = {0}; 
+        size_t enc_len = 0;
+        size_t enc_polyLen = 0;
 
         UINT nonce[3];
         UINT counter = 1;
         int plainTextLen;
 
-        recv(client_socket, (char*)key, sizeof(key), 0);
-        int len = recv(client_socket, (char*)&plainTextLen, sizeof(plainTextLen), 0);
-        if (len <= 0) break;
-        recv(client_socket, (char*)ciphertext, plainTextLen, 0);
-        recv(client_socket, (char*)mac, sizeof(mac), 0);
-        recv(client_socket, (char*)nonce, sizeof(nonce), 0);
-        recv(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
+        recv(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+        recv(client_socket, (char*)enc_key, enc_length, 0);
 
+        ECC_Dec(enc_key, enc_length, key, 8);
 
-        wcscpy(displayMessage, L"BLAKE3로 생성된 키:\r\n");
+        wcscpy(displayMessage, L"ECC의 개인 키로 복호화된 ChaCha20 키:\r\n");
         for (int i = 0; i < 8; i++) {
             wchar_t temp[16];
             wsprintf(temp, L"%08X ", key[i]);
             wcscat(displayMessage, temp);
         }
         wcscat(displayMessage, L"\r\n");
-                
+
+        recv(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+        recv(client_socket, (char*)enc_poly1305_key, enc_length, 0);
+
+        ECC_Dec(enc_poly1305_key, enc_length, (UINT*)poly1305_key, 8);
+
+        int len = recv(client_socket, (char*)&plainTextLen, sizeof(plainTextLen), 0);
+        if (len <= 0) break;
+        recv(client_socket, (char*)ciphertext, plainTextLen, 0);
+        recv(client_socket, (char*)mac, sizeof(mac), 0);
+        recv(client_socket, (char*)nonce, sizeof(nonce), 0);
+        // recv(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
+
+               
         wcscat(displayMessage, L"암호문:\r\n");
         for (int i = 0; i < plainTextLen; i++) {
             wchar_t temp[4];
@@ -106,7 +214,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         }
         wcscat(displayMessage, L"\r\n");
        
-        wcscat(displayMessage, L"Poly1305 키:\r\n");
+        wcscat(displayMessage, L"ECC의 개인 키로 복호화된 Poly1305 키:\r\n");
         for (int i = 0; i < 32; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", poly1305_key[i]);
@@ -157,7 +265,8 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
             MultiByteToWideChar(CP_UTF8, 0, decrypted_text, -1, utf16Buffer, BUFFER_SIZE);
             
             // 구분자 '|'을 기준으로 문자열 분할
-            wchar_t* token = wcstok(utf16Buffer, L"|");
+            wchar_t* context = NULL;
+            wchar_t* token = wcstok(utf16Buffer, L"|", &context);
             int fieldIndex = 0;
 
             // 각 필드를 항목 제목과 함께 출력
@@ -193,7 +302,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
 
                 wcscat(displayResult, token);
                 fieldIndex++;
-                token = wcstok(NULL, L"|");
+                token = wcstok(NULL, L"|", &context);
             }
             
 
@@ -211,6 +320,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPWSTR args, int ncmdshow) {
+    initialize_openssl();
     WNDCLASS wc = {0};
     wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -255,13 +365,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // hEditOutput 생성
             hEditOutput = CreateWindow(L"EDIT", L"", 
                 WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL | ES_READONLY,
-                20, 20, WINDOW_WIDTH - 40, (WINDOW_HEIGHT - 300) * 3 / 4, hwnd, NULL, NULL, NULL);
+                20, 20, WINDOW_WIDTH - 40, (WINDOW_HEIGHT - 340) * 3 / 5, hwnd, NULL, NULL, NULL);  // 높이를 3/5로 설정
             SendMessage(hEditOutput, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-            // hEditDisplay 생성 - hEditOutput 아래에 위치
+            // hEditDisplay 생성 - hEditOutput 아래에 위치, 남은 공간 사용
             hEditDisplay = CreateWindow(L"EDIT", L"", 
                 WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL | ES_READONLY,
-                20, 40 + (WINDOW_HEIGHT - 300) * 3 / 4, WINDOW_WIDTH - 40, 380 , hwnd, NULL, NULL, NULL);
+                20, 30 + (WINDOW_HEIGHT - 340) * 3 / 5, WINDOW_WIDTH - 40, 440, hwnd, NULL, NULL, NULL);  // y 위치와 높이 설정
             SendMessage(hEditDisplay, WM_SETFONT, (WPARAM)hFont, TRUE);
             break;
         case WM_DESTROY:

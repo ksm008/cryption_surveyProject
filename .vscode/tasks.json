@@ -10,13 +10,18 @@
                 "${file}",
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe",
-                "${workspaceFolder}\\encryption\\ChaCha20.c", // 사용자 환경에 따라 달라질 수 있음
-                "-I${workspaceFolder}\\encryption\\blake3\\",
+                "${workspaceFolder}\\encryption\\ChaCha20.c", 
+                "${workspaceFolder}\\encryption\\ECC.c",
+                "-I${workspaceFolder}\\encryption\\blake3.c",
+                "-I${workspaceFolder}\\encryption\\include\\",
+                "-I${workspaceFolder}\\encryption\\",
+                "-L${workspaceFolder}\\encryption\\lib\\",
+                "-L.",  
+                "-lcrypto",                       
                 "-lws2_32",                
                 "-mwindows",
                 "-municode",
-                "-L.",
-                "-lblake3",
+                "-lblake3"
             ],
             "options": {
                 "cwd": "${fileDirname}"

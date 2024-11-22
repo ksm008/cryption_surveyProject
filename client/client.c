@@ -2,8 +2,16 @@
 #include <windows.h>
 #include <stdio.h>
 #include <time.h>
+#include <openssl/crypto.h>
+#include <openssl/ec.h>
+#include <openssl/ecdh.h>
+#include <openssl/obj_mac.h>
+#include <openssl/err.h>
+#include <stdlib.h>
+#include <string.h>
 #include <blake3.h> 
 #include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
+#include "../encryption/ECC.h" 
 
 #pragma comment(lib, "ws2_32.lib")
 #define PORT 8084
@@ -21,11 +29,22 @@ HWND hCheckQ2_1, hCheckQ2_2, hCheckQ2_3, hCheckQ2_4, hCheckQ2_5;
 HFONT hFont;
 SOCKET client_socket;  
 UINT key[8];
+BYTE server_pub_key_buf[256];
+size_t server_pub_key_len = 0;
+int enc_length = 0;
 
 const wchar_t* fontName = L"-윤고딕320";  
 int fontSize = 16;   
 
+void initialize_openssl() {
+    if (OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL) == 0) {
+        fprintf(stderr, "OpenSSL 초기화 실패\n");
+        abort();
+    }
+}
+
 void InitializeSocketAndConnect() {
+    initialize_openssl();
     WSADATA wsa;
     struct sockaddr_in server;
 
@@ -38,7 +57,19 @@ void InitializeSocketAndConnect() {
     if (connect(client_socket, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
         MessageBox(NULL, L"서버 연결 실패", L"오류", MB_OK);
     } else {
-        MessageBox(NULL, L"서버에 연결됨", L"알림", MB_OK);
+        // 서버로부터 공개 키 수신
+        server_pub_key_len = recv(client_socket, (char*)server_pub_key_buf, sizeof(server_pub_key_buf), 0);
+        if (server_pub_key_len <= 0) {
+            MessageBox(NULL, L"공개 키 수신 실패", L"오류", MB_OK);
+        } else {
+            wchar_t displayMessage[512] = L"서버와 연결되었습니다.\r\n\r\n서버로부터 받은 공개 키: ";
+            for (size_t i = 0; i < server_pub_key_len; i++) {
+                wchar_t temp[4];
+                wsprintf(temp, L"%02X", server_pub_key_buf[i]);
+                wcscat(displayMessage, temp);
+            }
+            MessageBox(NULL, displayMessage, L"알림", MB_OK);
+        }
     }
 }
 
@@ -74,6 +105,49 @@ void GenerateBlake3Key(const char* input, size_t inputLength, UINT key[8]) {
                  ((UINT)output[i * 4 + 3]);
     }
 }
+
+void ECC_Enc(UINT *key, size_t key_len, BYTE *output, size_t *output_len) {
+    // ECC 그룹 생성 (서버 공개 키와 같은 곡선 사용)
+    const EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_secp256k1);
+    if (!group) {
+        MessageBox(NULL, L"ECC 그룹 생성 실패", L"오류", MB_OK);
+        return;
+    }
+
+    // 서버의 공개 키를 복원
+    EC_POINT *server_pub_key = EC_POINT_new(group);
+    if (!server_pub_key) {
+        MessageBox(NULL, L"서버 공개 키 복원 실패", L"오류", MB_OK);
+        return;
+    }
+
+    if (!EC_POINT_oct2point(group, server_pub_key, server_pub_key_buf, server_pub_key_len, NULL)) {
+        MessageBox(NULL, L"서버 공개 키 변환 실패", L"오류", MB_OK);
+        return;
+    }
+
+    // 서버 공개 키를 EC_KEY 객체로 변환
+    EC_KEY *server_key = EC_KEY_new();
+    if (!server_key) {
+        MessageBox(NULL, L"서버 키 생성 실패", L"오류", MB_OK);
+        return;
+    }
+
+    if (!EC_KEY_set_group(server_key, group) || !EC_KEY_set_public_key(server_key, server_pub_key)) {
+        MessageBox(NULL, L"서버 공개 키 설정 실패", L"오류", MB_OK);
+        return;
+    }
+
+    // 암호화 수행
+    enc_length = ecc_encrypt(server_key, key, key_len, output);
+    *output_len = enc_length;
+
+    // 메모리 해제
+    EC_KEY_free(server_key);
+    EC_POINT_free(server_pub_key);
+    EC_GROUP_free((EC_GROUP *)group);
+}
+
 
 void OnSendData(HWND hwnd) {
     wchar_t name[50], q1[100], q3[100], q4[100], q5[100], q6[7000];
@@ -145,20 +219,41 @@ void OnSendData(HWND hwnd) {
     BYTE ciphertext[BUFFER_SIZE] = {0};
     BYTE mac[16] = {0};
     UINT nonce[3] = {0};
+    BYTE enc_key[512] = {0};
+    size_t enc_len = 0;
     BYTE poly1305_key[32] = {0};
+    BYTE enc_poly1305_key[512] = {0};
+    size_t enc_polyLen = 0;
     UINT counter = 1;  // 초기 counter 값
-    wchar_t displayMessage[BUFFER_SIZE * 4];    
+    wchar_t displayMessage[BUFFER_SIZE * 8];    
 
     // BLAKE3로 32바이트 키 생성
     GenerateBlake3Key(utf8Plaintext, plainTextLen, key);
 
-    wcscpy(displayMessage, L"::생성된 데이터::\r\n- 1. BLAKE3로 생성된 키\r\n");
+    wcscpy(displayMessage, L"::생성된 데이터::\r\n- 1-1. BLAKE3로 생성된 ChaCha20키\r\n");
     for (int i = 0; i < 8; i++) {
         wchar_t temp[16];
         wsprintf(temp, L"%08X ", key[i]);
         wcscat(displayMessage, temp);
     }
     wcscat(displayMessage, L"\r\n");
+
+    ECC_Enc(key, 8, enc_key, &enc_len);
+
+    BYTE enc_key_backup[512];
+    memcpy(enc_key_backup, enc_key, enc_length);
+
+    wcscat(displayMessage, L"- 1-2. ECC로 암호화된 ChaCha20키\r\n");
+    for (size_t i = 0; i < enc_length; i++) {
+        wchar_t temp[4];
+        wsprintf(temp, L"%02X ", enc_key_backup[i]);
+        wcscat(displayMessage, temp);
+    }
+    wcscat(displayMessage, L"\r\n");
+
+    send(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+    send(client_socket, (char*)enc_key_backup, enc_length, 0);
+
     // Nonce 생성
     generate_nonce(nonce);
 
@@ -178,8 +273,7 @@ void OnSendData(HWND hwnd) {
         wsprintf(temp, L"%02X ", utf8Plaintext[i]);
         wcscat(displayMessage, temp);
 
-    }
-    
+    }    
 
     // Ciphertext 출력
     wcscat(displayMessage, L"\r\n- 3. 암호문 (16진수)\r\n");
@@ -201,12 +295,27 @@ void OnSendData(HWND hwnd) {
     wcscat(displayMessage, L"\r\n");
 
     // Poly1305 Key 출력
-    wcscat(displayMessage, L"- 5. Poly1305 키:\r\n");
+    wcscat(displayMessage, L"- 5-1. Poly1305 키:\r\n");
     for (int i = 0; i < 32; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", poly1305_key[i]);
         wcscat(displayMessage, temp);
     }
+    wcscat(displayMessage, L"\r\n");
+
+    ECC_Enc((UINT*)poly1305_key, 8, enc_poly1305_key, &enc_polyLen);
+
+    send(client_socket, (char*)&enc_length, sizeof(enc_length), 0);
+    send(client_socket, (char*)enc_poly1305_key, enc_length, 0);
+
+    wcscat(displayMessage, L"- 5-2. ECC로 암호화된 Poly1305키\r\n");
+    for (size_t i = 0; i < enc_length; i++) {
+        wchar_t temp[4];
+        wsprintf(temp, L"%02X ", enc_poly1305_key[i]);
+        wcscat(displayMessage, temp);
+    }
+    wcscat(displayMessage, L"\r\n");
+
     wcscat(displayMessage, L"\r\n");
     // MAC 출력
     wcscat(displayMessage, L"- 6. MAC:\r\n");
@@ -221,12 +330,33 @@ void OnSendData(HWND hwnd) {
     SetWindowText(hEditDisplay, displayMessage);
 
     // 서버로 데이터 전송 (실제 암호문 길이를 사용하여 바이너리로 전송)
-    send(client_socket, (char*)key, sizeof(key), 0);
+    // send(client_socket, (char*)key, sizeof(key), 0);
+    // send(client_socket, (char*)&enc_len, sizeof(enc_len), 0);
+    // send(client_socket, (char*)enc_key, enc_leng, 0);
+
+
+    // // 16진수로 데이터를 메시지 박스로 띄우기
+    // wchar_t temp[8];  // 각 데이터는 두 자리가 필요하므로 여유 공간을 두고 문자열에 추가
+    // wchar_t encKeyMessage[BUFFER_SIZE * 2];  // 데이터를 출력할 메시지 버퍼
+
+    // // 초기화
+    // wcscpy(encKeyMessage, L"Encrypted data:\r\n");
+
+    // // 데이터 길이만큼 16진수로 출력
+    // for (size_t i = 0; i < enc_length; i++) {
+    //     wchar_t temp[4];
+    //     wsprintf(temp, L"%02X ", enc_key_backup[i]);
+    //     wcscat(encKeyMessage, temp);
+    // }
+   
+    // // 메시지 박스에 직접 출력
+    // MessageBox(NULL, encKeyMessage, L"Sent Encrypted Data", MB_OK);
+
     send(client_socket, (char*)&plainTextLen, sizeof(plainTextLen), 0);
     send(client_socket, (char*)ciphertext, plainTextLen, 0);
     send(client_socket, (char*)mac, sizeof(mac), 0);
     send(client_socket, (char*)nonce, sizeof(nonce), 0);
-    send(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
+    // send(client_socket, (char*)poly1305_key, sizeof(poly1305_key), 0);
 
     // GUI에 전송 상태 표시
     SetWindowText(hEditSend, L"메시지 전송 완료");
