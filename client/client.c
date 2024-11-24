@@ -266,7 +266,7 @@ void OnSendData(HWND hwnd) {
     poly1305_mac(ciphertext, plainTextLen, poly1305_key, mac);
 
     // Plaintext (UTF-8) 출력
-    wcscat(displayMessage, L"- 2. 평문 (16진수)\r\n");
+    wcscat(displayMessage, L"- 2. 평문:\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", utf8Plaintext[i]);
@@ -275,7 +275,7 @@ void OnSendData(HWND hwnd) {
     }    
 
     // Ciphertext 출력
-    wcscat(displayMessage, L"\r\n- 3. 암호문 (16진수)\r\n");
+    wcscat(displayMessage, L"\r\n- 3. 암호문:\r\n");
     for (int i = 0; i < plainTextLen; i++) {
         wchar_t temp[4];
         wsprintf(temp, L"%02X ", ((BYTE*)ciphertext)[i]);
@@ -419,18 +419,18 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HWND hButtonSubmit = CreateWindow(L"BUTTON", L"제출", WS_VISIBLE | WS_CHILD | WS_TABSTOP, (WINDOW_WIDTH - buttonWidth) / 2, 530, buttonWidth, 25, hwnd, (HMENU)BUTTON_SUBMIT, NULL, NULL);
             SendMessage(hButtonSubmit, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-            hEditDisplay = CreateWindow(L"EDIT", NULL, WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL, 
-                                       centerX, 580, CONTROL_WIDTH, 100, hwnd, NULL, NULL, NULL); // 결과 표시 창
+            hEditDisplay = CreateWindow(L"EDIT", NULL, WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_READONLY, 
+                                       centerX, 580, CONTROL_WIDTH, 100, hwnd, NULL, NULL, NULL); 
             SendMessage(hEditDisplay, WM_SETFONT, (WPARAM)hFont, TRUE);
-            InitializeSocketAndConnect();  // 소켓 초기화 및 서버 연결
+            InitializeSocketAndConnect();  
             break;
         }
         case WM_COMMAND:
             if (LOWORD(wp) == 1) OnSendData(hwnd);
             break;
         case WM_DESTROY:
-            closesocket(client_socket);  // 프로그램 종료 시 소켓 닫기
-            WSACleanup();                // Winsock 정리
+            closesocket(client_socket);  
+            WSACleanup();                
             PostQuitMessage(0);
             break;
     }

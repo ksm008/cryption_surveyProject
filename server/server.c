@@ -189,7 +189,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
 
         ECC_Dec(enc_key, enc_length, key, 8);
 
-        wcscpy(displayMessage, L"ECC의 개인 키로 복호화된 ChaCha20 키:\r\n");
+        wcscpy(displayMessage, L"- 1. ECC의 개인 키로 복호화된 ChaCha20 키:\r\n");
         for (int i = 0; i < 8; i++) {
             wchar_t temp[16];
             wsprintf(temp, L"%08X ", key[i]);
@@ -208,7 +208,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         recv(client_socket, (char*)mac, sizeof(mac), 0);
         recv(client_socket, (char*)nonce, sizeof(nonce), 0);
                
-        wcscat(displayMessage, L"암호문:\r\n");
+        wcscat(displayMessage, L"- 2. 암호문:\r\n");
         for (int i = 0; i < plainTextLen; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", ciphertext[i]);
@@ -216,7 +216,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         }
         wcscat(displayMessage, L"\r\n");
                
-        wcscat(displayMessage, L"Nonce:\r\n");
+        wcscat(displayMessage, L"- 3. Nonce:\r\n");
         for (int i = 0; i < 3; i++) {
             wchar_t temp[16];
             wsprintf(temp, L"%08X ", nonce[i]);
@@ -224,14 +224,14 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         }
         wcscat(displayMessage, L"\r\n");
        
-        wcscat(displayMessage, L"ECC의 개인 키로 복호화된 Poly1305 키:\r\n");
+        wcscat(displayMessage, L"- 4. ECC의 개인 키로 복호화된 Poly1305 키:\r\n");
         for (int i = 0; i < 32; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", poly1305_key[i]);
             wcscat(displayMessage, temp);
         }
         wcscat(displayMessage, L"\r\n");    
-        wcscat(displayMessage, L"MAC:\r\n");
+        wcscat(displayMessage, L"- 5-1. MAC:\r\n");
         for (int i = 0; i < 16; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", mac[i]);
@@ -243,7 +243,7 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         chacha20_encrypt(ciphertext, decrypted, plainTextLen, key, counter, nonce);
         poly1305_mac(ciphertext, plainTextLen, poly1305_key, mac_2);
 
-        wcscat(displayMessage, L"재생성된 Poly1305 MAC:\r\n");
+        wcscat(displayMessage, L"- 5-2. 재생성된 Poly1305 MAC:\r\n");
         for (int i = 0; i < 16; i++) {
             wchar_t temp[4];
             wsprintf(temp, L"%02X ", mac_2[i]);
@@ -252,9 +252,9 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
         wcscat(displayMessage, L"\r\n");
 
         if (memcmp(mac, mac_2, sizeof(mac)) == 0) {
-            wcscat(displayMessage, L"무결성 인증에 성공하였습니다.\r\n");
+            wcscat(displayMessage, L":: 무결성 인증에 성공하였습니다. ::\r\n");
             // Decrypted data 출력
-            wcscat(displayMessage, L"복호문 (16진수):\r\n");
+            wcscat(displayMessage, L"- 6-1. 복호문:\r\n");
             for (int i = 0; i < plainTextLen; i++) {
                 wchar_t temp[4];
                 wsprintf(temp, L"%02X ", decrypted[i]);
@@ -269,10 +269,14 @@ DWORD WINAPI ServerThread(LPVOID lpParam) {
             for (int i = 0; i < plainTextLen; i++) {
                 decrypted_text[i] = decrypted[i];  // 바이트 배열을 텍스트 배열로 변환
             }
+            wcscat(displayMessage, L"\r\n");
 
             // UTF-8로 변환된 텍스트를 출력
             wchar_t utf16Buffer[BUFFER_SIZE] = {0};
             MultiByteToWideChar(CP_UTF8, 0, decrypted_text, -1, utf16Buffer, BUFFER_SIZE);
+
+            wcscat(displayMessage, L"- 6-2. 복호문 (원본 데이터):\r\n");
+            wcscat(displayMessage, utf16Buffer);
             
             // 구분자 '|'을 기준으로 문자열 분할
             wchar_t* context = NULL;
