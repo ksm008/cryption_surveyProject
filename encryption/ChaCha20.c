@@ -72,8 +72,10 @@ void chacha20_encrypt(BYTE *plaintext, BYTE *ciphertext, uint32_t length, UINT k
 
 // Nonce 자동 생성 함수
 void generate_nonce(UINT nonce[3]) {
+    srand((unsigned int)(time(NULL) ^ clock())); 
+
     for (int i = 0; i < 3; i++) {
-        nonce[i] = rand();
+        nonce[i] = ((unsigned int)rand() << 16) | (rand() & 0xFFFF);
     }
 }
 

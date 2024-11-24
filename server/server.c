@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
+#include "../encryption/ChaCha20.h"  
 #include "../encryption/ECC.h" 
 
 #pragma comment(lib, "ws2_32.lib")
@@ -34,7 +34,6 @@ void initialize_openssl() {
         abort();
     }
 }
-
 
 void ECC_Dec(BYTE *input, size_t input_len, UINT *output, size_t output_len) {
     // ECC 그룹 생성 (개인 키와 같은 곡선 사용)
@@ -376,13 +375,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // hEditOutput 생성
             hEditOutput = CreateWindow(L"EDIT", L"", 
                 WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL | ES_READONLY,
-                20, 20, WINDOW_WIDTH - 40, (WINDOW_HEIGHT - 340) * 3 / 5, hwnd, NULL, NULL, NULL);  // 높이를 3/5로 설정
+                20, 20, WINDOW_WIDTH - 40, (WINDOW_HEIGHT - 340) * 3 / 5, hwnd, NULL, NULL, NULL);  
             SendMessage(hEditOutput, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-            // hEditDisplay 생성 - hEditOutput 아래에 위치, 남은 공간 사용
+            // hEditDisplay 생성 - hEditOutput 아래에 위치
             hEditDisplay = CreateWindow(L"EDIT", L"", 
                 WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL | ES_READONLY,
-                20, 30 + (WINDOW_HEIGHT - 340) * 3 / 5, WINDOW_WIDTH - 40, 440, hwnd, NULL, NULL, NULL);  // y 위치와 높이 설정
+                20, 30 + (WINDOW_HEIGHT - 340) * 3 / 5, WINDOW_WIDTH - 40, 440, hwnd, NULL, NULL, NULL);  
             SendMessage(hEditDisplay, WM_SETFONT, (WPARAM)hFont, TRUE);
             break;
         case WM_DESTROY:

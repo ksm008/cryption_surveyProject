@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <blake3.h> 
-#include "../encryption/ChaCha20.h"  // 암호화 헤더 파일
+#include "../encryption/ChaCha20.h"  
 #include "../encryption/ECC.h" 
 
 #pragma comment(lib, "ws2_32.lib")
@@ -22,7 +22,6 @@
 #define WINDOW_HEIGHT 800
 #define CONTROL_WIDTH 600
 #define BUTTON_SUBMIT 1
-
 
 HWND hEditSend, hEditName, hEditQ1, hEditQ3, hEditQ4, hEditQ5, hEditQ6, hEditDisplay;  
 HWND hCheckQ2_1, hCheckQ2_2, hCheckQ2_3, hCheckQ2_4, hCheckQ2_5;
