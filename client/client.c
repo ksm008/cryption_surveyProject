@@ -73,21 +73,25 @@ void InitializeSocketAndConnect() {
 }
 
 void GetCurrentTimeFormatted(wchar_t* buffer, int bufferSize) {
-    time_t t = time(NULL);
-    struct tm tm;
-    localtime_s(&tm, &t);
+    // Windows SYSTEMTIME 구조체로 현재 시간 가져오기
+    SYSTEMTIME st;
+    GetLocalTime(&st);
 
+    // AM/PM 계산
     wchar_t ampm[3] = L"AM";
-    int hour = tm.tm_hour;
+    int hour = st.wHour;
     if (hour >= 12) {
         ampm[0] = L'P';
         if (hour > 12) hour -= 12;
     } else if (hour == 0) {
         hour = 12;
     }
-    swprintf(buffer, bufferSize, L"%04d-%02d-%02d %02d:%02d %s", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, hour, tm.tm_min, ampm);
-}
 
+    // 포맷된 문자열 생성
+    swprintf(buffer, bufferSize, L"%04d-%02d-%02d %02d:%02d:%02d.%03d %s",
+        st.wYear, st.wMonth, st.wDay,
+        hour, st.wMinute, st.wSecond, st.wMilliseconds, ampm);
+}
 void GenerateBlake3Key(const char* input, size_t inputLength, UINT key[8]) {
     blake3_hasher hasher;
     BYTE output[32]; // BLAKE3 해시 출력은 32바이트
