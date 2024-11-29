@@ -73,7 +73,6 @@ void InitializeSocketAndConnect() {
 }
 
 void GetCurrentTimeFormatted(wchar_t* buffer, int bufferSize) {
-    // Windows SYSTEMTIME 구조체로 현재 시간 가져오기
     SYSTEMTIME st;
     GetLocalTime(&st);
 
@@ -92,6 +91,7 @@ void GetCurrentTimeFormatted(wchar_t* buffer, int bufferSize) {
         st.wYear, st.wMonth, st.wDay,
         hour, st.wMinute, st.wSecond, st.wMilliseconds, ampm);
 }
+
 void GenerateBlake3Key(const char* input, size_t inputLength, UINT key[8]) {
     blake3_hasher hasher;
     BYTE output[32]; // BLAKE3 해시 출력은 32바이트
